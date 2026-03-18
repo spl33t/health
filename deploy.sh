@@ -29,6 +29,9 @@ if ! command -v pm2 >/dev/null 2>&1; then
     npm install -g pm2
 fi
 
+# Синхронизируем in-memory PM2 с установленной версией (убирает warning)
+pm2 update
+
 # 6. Перезапуск приложения в PM2
 # Если процесс еще не запущен — он будет запущен. Если запущен — перезагружен.
 echo "Restarting application in PM2..."

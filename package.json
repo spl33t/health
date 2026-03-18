@@ -1,0 +1,41 @@
+{
+  "name": "health",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "build": "tsc",
+    "": "----- Tests -----",
+    "test:vk": "ts-node tests/vk-cloud-balance.ts",
+    "test:tg": "ts-node tests/telegram.ts",
+    "test:http": "ts-node tests/http.ts",
+    "test:disk": "ts-node tests/disk.ts",
+    "test:ram": "ts-node tests/ram.ts",
+    "test:cpu": "ts-node tests/cpu.ts",
+    "test:docker": "ts-node tests/docker.ts",
+    "test:all": "npm run test:http && npm run test:disk && npm run test:ram && npm run test:cpu",
+    "env:init": "node -e \"require('fs').copyFileSync('.env.example', '.env')\""
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "dockerode": "^4.0.2",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "nodemailer": "^6.9.16",
+    "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^4.0.1",
+    "@types/dotenv": "^6.1.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.3",
+    "@types/nodemailer": "^7.0.11",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

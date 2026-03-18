@@ -101,6 +101,13 @@ if (emailEnabled && smtpHost && smtpUser && smtpPass && emailFrom && emailTo) {
 const monitorService = new MonitorService(checkers, alertProviders);
 monitorService.start();
 
+// Рассылка системных уведомлений (старт/стоп) по провайдерам
+async function notifyProviders(result: { target: string; isUp: boolean; message: string }) {
+    if (alertProviders.length === 0) return;
+    const payload = { ...result, timestamp: new Date() };
+    await Promise.allSettled(alertProviders.map((p) => p.sendAlert(payload)));
+}
+
 // Маршруты
 app.get('/status', (req: Request, res: Response) => {
     res.json({
@@ -114,7 +121,36 @@ app.get('/mock-target', (req: Request, res: Response) => {
     res.status(200).send('Mock Service UP');
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
     console.log(`Сервер Health Monitor запущен на http://localhost:${port}`);
     console.log('Активные проверки:', checkers.map(c => c.name).join(', '));
+    await notifyProviders({
+        target: 'Health Monitor',
+        isUp: true,
+        message: 'Health Monitor запущен и работает',
+    });
 });
+
+// Уведомление при завершении процесса
+let isShuttingDown = false;
+async function shutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`Получен ${signal}, завершение...`);
+    try {
+        await Promise.race([
+            notifyProviders({
+                target: 'Health Monitor',
+                isUp: false,
+                message: 'Health Monitor остановлен',
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+        ]);
+    } catch (e) {
+        // игнорируем таймаут или ошибки отправки
+    } finally {
+        process.exit(0);
+    }
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

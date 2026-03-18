@@ -6,6 +6,7 @@
     "start": "ts-node src/index.ts",
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "build": "tsc",
+    "env:init": "node -e \"require('fs').copyFileSync('.env.example', '.env')\"",
     "": "----- Tests -----",
     "test:vk": "ts-node tests/vk-cloud-balance.ts",
     "test:tg": "ts-node tests/telegram.ts",
@@ -14,8 +15,7 @@
     "test:ram": "ts-node tests/ram.ts",
     "test:cpu": "ts-node tests/cpu.ts",
     "test:docker": "ts-node tests/docker.ts",
-    "test:all": "npm run test:http && npm run test:disk && npm run test:ram && npm run test:cpu",
-    "env:init": "node -e \"require('fs').copyFileSync('.env.example', '.env')\""
+    "test:all": "npm run test:http && npm run test:disk && npm run test:ram && npm run test:cpu && npm run test:docker"
   },
   "author": "",
   "license": "ISC",
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@types/dockerode": "^4.0.1",
+    "pm2": "^5.4.3",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.3",

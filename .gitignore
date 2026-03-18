@@ -33,6 +33,7 @@ dist/
 
 # Environment variables
 .env
+.env.draft
 
 # Optional npm cache directory
 .npm

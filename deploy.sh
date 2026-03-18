@@ -23,13 +23,19 @@ case "$OSTYPE" in
         ;;
 esac
 
-# 5. Перезапуск приложения в PM2 (npx — без глобальной установки)
+# 5. Убеждаемся, что PM2 установлен глобально
+if ! command -v pm2 >/dev/null 2>&1; then
+    echo "Installing PM2 globally..."
+    npm install -g pm2
+fi
+
+# 6. Перезапуск приложения в PM2
 # Если процесс еще не запущен — он будет запущен. Если запущен — перезагружен.
 echo "Restarting application in PM2..."
-npx pm2 restart ecosystem.config.js || npx pm2 start ecosystem.config.js
+pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
 
 # Сохраняем список процессов PM2 для автозагрузки
-npx pm2 save
+pm2 save
 
 echo "--- Deployment Finished Successfully! ---"
 echo "Tip: To enable startup on boot, run 'pm2 startup' once manually."

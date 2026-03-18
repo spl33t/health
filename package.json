@@ -30,7 +30,6 @@
   },
   "devDependencies": {
     "@types/dockerode": "^4.0.1",
-    "pm2": "^5.4.3",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.3",

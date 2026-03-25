@@ -18,11 +18,12 @@ async function testTelegram() {
     const provider = new TelegramProvider(botToken, chatId);
 
     const mockupResult: ICheckResult = {
+        checkerName: 'Тестовый чекер',
         target: 'ТЕСТОВАЯ ПРОВЕРКА',
         isUp: false,
         status: 500,
         message: 'Это тестовое сообщение для проверки связи с ботом.',
-        timestamp: new Date()
+        timestamp: new Date(),
     };
 
     console.log(`Отправка тестового алерта в чат ${chatId}...`);

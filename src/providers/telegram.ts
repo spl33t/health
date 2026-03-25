@@ -13,9 +13,11 @@ export class TelegramProvider implements IAlertProvider {
 
     async sendAlert(result: ICheckResult): Promise<void> {
         const statusText = result.isUp ? '✅ UP' : '🚨 DOWN';
+        const checkerLine = `<b>Checker</b>: ${result.checkerName}\n<b>Target</b>: ${result.target}`;
         const message = `
-<b>Service Alert</b>: ${result.target} is ${statusText}
-<b>Status</b>: ${result.status || 'N/A'}
+<b>Service Alert</b> — ${statusText}
+${checkerLine}
+<b>Status</b>: ${result.status ?? 'N/A'}
 <b>Message</b>: ${result.message || 'No message'}
 <b>Time</b>: ${result.timestamp.toISOString()}
     `.trim();

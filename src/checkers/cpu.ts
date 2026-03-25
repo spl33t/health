@@ -33,6 +33,7 @@ export class CpuChecker implements IChecker {
             const isOk = usagePercent < this.thresholdPercent;
 
             return {
+                checkerName: this.name,
                 target: `CPU (${this.name})`,
                 isUp: isOk,
                 message: isOk
@@ -42,6 +43,7 @@ export class CpuChecker implements IChecker {
             };
         } catch (error: any) {
             return {
+                checkerName: this.name,
                 target: `CPU (${this.name})`,
                 isUp: false,
                 message: `Ошибка проверки CPU: ${error.message}`,

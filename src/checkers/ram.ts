@@ -29,6 +29,7 @@ export class RamChecker implements IChecker {
             const totalMB = (totalMemory / 1024 / 1024).toFixed(0);
 
             return {
+                checkerName: this.name,
                 target: `RAM (${this.name})`,
                 isUp: isOk,
                 message: isOk
@@ -38,6 +39,7 @@ export class RamChecker implements IChecker {
             };
         } catch (error: any) {
             return {
+                checkerName: this.name,
                 target: `RAM (${this.name})`,
                 isUp: false,
                 message: `Ошибка проверки RAM: ${error.message}`,

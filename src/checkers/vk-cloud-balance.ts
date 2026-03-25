@@ -59,6 +59,7 @@ export class VkCloudBalanceChecker implements IChecker {
             await browser.close();
 
             return {
+                checkerName: this.name,
                 target: `VK Cloud Balance (${this.name})`,
                 isUp: isOk,
                 message: isOk
@@ -72,6 +73,7 @@ export class VkCloudBalanceChecker implements IChecker {
             }
             await browser.close();
             return {
+                checkerName: this.name,
                 target: `VK Cloud Balance (${this.name})`,
                 isUp: false,
                 message: `Ошибка скрапинга баланса VK Cloud: ${error.message}`,

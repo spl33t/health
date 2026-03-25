@@ -6,6 +6,31 @@ interface ContainerInspectState {
     Health?: { Status?: string };
 }
 
+function getContainerDisplayName(container: { Names?: string[]; Id?: string; Labels?: Record<string, string> }): string {
+    const name = container.Names?.[0]?.replace(/^\//, '') || container.Id?.slice(0, 12) || 'unknown';
+    const service = container.Labels?.['com.docker.compose.service'];
+    return service || name;
+}
+
+/**
+ * Точное совпадение имени (не подстрока): compose service, любой из Names, или отображаемое имя.
+ */
+function matchesTargetPattern(
+    container: { Names?: string[]; Id?: string; Labels?: Record<string, string> },
+    pattern: string
+): boolean {
+    if (pattern === '*') return true;
+
+    const service = container.Labels?.['com.docker.compose.service'];
+    if (service === pattern) return true;
+
+    for (const n of container.Names || []) {
+        if (n.replace(/^\//, '') === pattern) return true;
+    }
+
+    return getContainerDisplayName(container) === pattern;
+}
+
 /**
  * Проверяет, что контейнер в плохом состоянии (unhealthy, restarting, exited).
  */
@@ -13,19 +38,13 @@ function isContainerUnhealthy(inspect: { State?: ContainerInspectState; RestartC
     const status = inspect.State?.Status || '';
     const healthStatus = inspect.State?.Health?.Status;
 
-    // Застрял в перезапусках
     if (status === 'restarting') return true;
-    // Упал и не поднялся
     if (status === 'exited') return true;
-    // Health check провален
     if (healthStatus === 'unhealthy') return true;
 
     return false;
 }
 
-/**
- * Формирует сообщение о причине сбоя.
- */
 function getFailureReason(inspect: { State?: ContainerInspectState; RestartCount?: number }): string {
     const status = inspect.State?.Status || '';
     const healthStatus = inspect.State?.Health?.Status;
@@ -38,112 +57,143 @@ function getFailureReason(inspect: { State?: ContainerInspectState; RestartCount
     return status;
 }
 
-export class DockerChecker implements IChecker {
-    private docker: Docker;
-    private targets: string[]; // имена контейнеров или '*' для всех
-    private confirmThreshold: number;
-    /** Счётчик последовательных сбоев по container ID */
-    private failureCounts: Map<string, number> = new Map();
+/**
+ * Один контейнер = один чекер: независимый статус и алерты.
+ */
+export class DockerContainerChecker implements IChecker {
+    private failureCount = 0;
 
-    /**
-     * @param name название чекера
-     * @param socketPath путь к Docker-сокету (undefined — сокет по умолчанию)
-     * @param targets имена контейнеров или ['*'] для проверки всех
-     * @param confirmThreshold число последовательных сбоев перед отправкой алерта
-     * @param intervalMs интервал проверки в миллисекундах
-     */
     constructor(
         public name: string,
-        socketPath: string | undefined,
-        targets: string[],
-        confirmThreshold: number,
+        private docker: Docker,
+        private containerId: string,
+        /** Отображается в target алерта */
+        private displayTarget: string,
+        private confirmThreshold: number,
         public intervalMs: number
-    ) {
-        this.docker = new Docker(socketPath ? { socketPath } : undefined);
-        this.targets = targets;
-        this.confirmThreshold = confirmThreshold;
-    }
-
-    private getContainerDisplayName(container: { Names?: string[]; Id?: string; Labels?: Record<string, string> }): string {
-        const name = container.Names?.[0]?.replace(/^\//, '') || container.Id?.slice(0, 12) || 'unknown';
-        const service = container.Labels?.['com.docker.compose.service'];
-        return service || name;
-    }
-
-    private matchesTarget(container: { Names?: string[]; Id?: string; Labels?: Record<string, string> }): boolean {
-        if (this.targets.length === 0) return false;
-        if (this.targets.includes('*')) return true;
-
-        const displayName = this.getContainerDisplayName(container);
-        const rawName = container.Names?.[0]?.replace(/^\//, '') || '';
-
-        return this.targets.some(
-            (t) =>
-                displayName === t ||
-                displayName.includes(t) ||
-                rawName === t ||
-                rawName.includes(t)
-        );
-    }
+    ) {}
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();
-
         try {
-            const containers = await this.docker.listContainers({ all: true });
-            const relevant = containers.filter((c) => this.matchesTarget(c));
-
-            if (relevant.length === 0) {
+            const container = this.docker.getContainer(this.containerId);
+            let inspect: Docker.ContainerInspectInfo;
+            try {
+                inspect = await container.inspect();
+            } catch {
                 return {
-                    target: this.name,
-                    isUp: true,
-                    message: 'No matching containers found',
+                    checkerName: this.name,
+                    target: this.displayTarget,
+                    isUp: false,
+                    message: 'Контейнер не найден (удалён или недоступен)',
                     timestamp,
                 };
             }
 
-            const failedContainers: { name: string; reason: string }[] = [];
-
-            for (const c of relevant) {
-                const container = this.docker.getContainer(c.Id);
-                const inspect = await container.inspect();
-                const displayName = this.getContainerDisplayName(c);
-
-                if (isContainerUnhealthy(inspect)) {
-                    const count = (this.failureCounts.get(c.Id) || 0) + 1;
-                    this.failureCounts.set(c.Id, count);
-
-                    if (count >= this.confirmThreshold) {
-                        failedContainers.push({
-                            name: displayName,
-                            reason: getFailureReason(inspect),
-                        });
-                    }
-                } else {
-                    this.failureCounts.delete(c.Id);
-                }
+            if (!isContainerUnhealthy(inspect)) {
+                this.failureCount = 0;
+                return {
+                    checkerName: this.name,
+                    target: this.displayTarget,
+                    isUp: true,
+                    status: 200,
+                    timestamp,
+                };
             }
 
-            const isUp = failedContainers.length === 0;
-            const message =
-                failedContainers.length > 0
-                    ? failedContainers.map((f) => `${f.name}: ${f.reason}`).join('; ')
-                    : undefined;
+            this.failureCount++;
+            const reason = getFailureReason(inspect);
+            if (this.failureCount < this.confirmThreshold) {
+                return {
+                    checkerName: this.name,
+                    target: this.displayTarget,
+                    isUp: true,
+                    status: 200,
+                    message: `Временный сбой (${this.failureCount}/${this.confirmThreshold}): ${reason}`,
+                    timestamp,
+                };
+            }
 
             return {
-                target: this.name,
-                isUp,
-                status: isUp ? 200 : 500,
-                message,
+                checkerName: this.name,
+                target: this.displayTarget,
+                isUp: false,
+                status: 500,
+                message: reason,
                 timestamp,
             };
         } catch (error: any) {
             return {
-                target: this.name,
+                checkerName: this.name,
+                target: this.displayTarget,
                 isUp: false,
                 message: `Docker API error: ${error.message}`,
                 timestamp,
             };
         }
     }
+}
+
+function uniqueCheckerName(displayName: string, id: string, used: Set<string>): string {
+    let base = `Docker / ${displayName}`;
+    if (used.has(base)) {
+        base = `Docker / ${displayName} (${id.slice(0, 8)})`;
+    }
+    used.add(base);
+    return base;
+}
+
+/**
+ * Создаёт по чекеру на каждый подходящий контейнер (список снимается при старте приложения).
+ */
+export async function createDockerContainerCheckers(
+    socketPath: string | undefined,
+    targets: string[],
+    confirmThreshold: number,
+    intervalMs: number
+): Promise<IChecker[]> {
+    const docker = new Docker(socketPath ? { socketPath } : undefined);
+    const list = await docker.listContainers({ all: true });
+
+    const wantAll = targets.includes('*');
+    const patterns = wantAll ? [] : targets.filter((t) => t !== '*');
+
+    if (!wantAll && patterns.length === 0) {
+        return [];
+    }
+
+    const picked = new Map<string, { id: string; displayName: string; checkerName: string }>();
+    const usedNames = new Set<string>();
+
+    if (wantAll) {
+        for (const c of list) {
+            const displayName = getContainerDisplayName(c);
+            const checkerName = uniqueCheckerName(displayName, c.Id, usedNames);
+            picked.set(c.Id, { id: c.Id, displayName, checkerName });
+        }
+    } else {
+        for (const pattern of patterns) {
+            const matches = list.filter((c) => matchesTargetPattern(c, pattern));
+            if (matches.length === 0) {
+                console.warn(`Docker: нет контейнеров, совпадающих с "${pattern}"`);
+            }
+            for (const c of matches) {
+                const displayName = getContainerDisplayName(c);
+                const checkerName = uniqueCheckerName(displayName, c.Id, usedNames);
+                picked.set(c.Id, { id: c.Id, displayName, checkerName });
+            }
+        }
+    }
+
+    return Array.from(picked.values()).map(
+        (p) =>
+            new DockerContainerChecker(
+                p.checkerName,
+                docker,
+                p.id,
+                p.displayName,
+                confirmThreshold,
+                intervalMs
+            )
+    );
 }

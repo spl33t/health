@@ -33,9 +33,10 @@ export class EmailProvider implements IAlertProvider {
 
     async sendAlert(result: ICheckResult): Promise<void> {
         const statusText = result.isUp ? '✅ UP' : '🚨 DOWN';
-        const subject = `[Health Monitor] ${result.target} — ${statusText}`;
+        const subject = `[Health Monitor] ${result.checkerName} — ${statusText}`;
         const html = `
 <h2>Service Alert</h2>
+<p><strong>Чекер:</strong> ${result.checkerName}</p>
 <p><strong>Target:</strong> ${result.target}</p>
 <p><strong>Status:</strong> ${statusText}</p>
 <p><strong>HTTP Status:</strong> ${result.status ?? 'N/A'}</p>

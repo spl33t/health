@@ -41,7 +41,6 @@ export class MonitorService {
             this.statusMap.set(checker.name, result.isUp);
 
             console.log(`Изменение статуса для ${checker.name}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`);
-            // Отправка уведомлений всем зарегистрированным провайдерам
             await this.notifyProviders(result);
         }
     }

@@ -18,6 +18,7 @@ export class HttpChecker implements IChecker {
         try {
             const response = await axios.get(this.url, { timeout: 5000 });
             return {
+                checkerName: this.name,
                 target: this.name,
                 isUp: response.status >= 200 && response.status < 300,
                 status: response.status,
@@ -25,6 +26,7 @@ export class HttpChecker implements IChecker {
             };
         } catch (error: any) {
             return {
+                checkerName: this.name,
                 target: this.name,
                 isUp: false,
                 status: error.response?.status ?? 0,

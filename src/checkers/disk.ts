@@ -81,6 +81,7 @@ export class DiskChecker implements IChecker {
             ).join(' | ');
 
             return {
+                checkerName: this.name,
                 target: `Disk Monitor (${this.name})`,
                 isUp: isAllOk,
                 message: isAllOk
@@ -90,6 +91,7 @@ export class DiskChecker implements IChecker {
             };
         } catch (error: any) {
             return {
+                checkerName: this.name,
                 target: `Disk Monitor (${this.name})`,
                 isUp: false,
                 message: `Ошибка проверки диска: ${error.message}`,

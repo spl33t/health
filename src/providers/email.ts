@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { IAlertProvider, ICheckResult } from '../types';
+import { formatTimeMoscow } from '../utils/formatTimeMoscow';
 
 export interface EmailProviderConfig {
     host: string;
@@ -41,7 +42,7 @@ export class EmailProvider implements IAlertProvider {
 <p><strong>Status:</strong> ${statusText}</p>
 <p><strong>HTTP Status:</strong> ${result.status ?? 'N/A'}</p>
 <p><strong>Message:</strong> ${result.message ?? 'No message'}</p>
-<p><strong>Time:</strong> ${result.timestamp.toISOString()}</p>
+<p><strong>Time:</strong> ${formatTimeMoscow(result.timestamp)}</p>
         `.trim();
 
         try {

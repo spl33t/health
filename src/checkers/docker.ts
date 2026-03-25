@@ -57,6 +57,16 @@ function getFailureReason(inspect: { State?: ContainerInspectState; RestartCount
     return status;
 }
 
+/** Реальный статус контейнера из `docker inspect` для поля `ICheckResult.status`. */
+function formatDockerRuntimeStatus(inspect: Docker.ContainerInspectInfo): string {
+    const run = inspect.State?.Status ?? 'unknown';
+    const health = inspect.State?.Health?.Status;
+    if (health) {
+        return `${run} (health: ${health})`;
+    }
+    return run;
+}
+
 /**
  * Один контейнер = один чекер: независимый статус и алерты.
  */
@@ -73,22 +83,64 @@ export class DockerContainerChecker implements IChecker {
         public intervalMs: number
     ) {}
 
+    /**
+     * После recreate контейнер получает новый ID — ищем актуальный по имени/target.
+     */
+    private async tryResolveContainerId(): Promise<boolean> {
+        try {
+            const list = await this.docker.listContainers({ all: true });
+            const target = this.displayTarget;
+            for (const c of list) {
+                if (getContainerDisplayName(c) === target) {
+                    this.containerId = c.Id;
+                    return true;
+                }
+                for (const n of c.Names || []) {
+                    if (n.replace(/^\//, '') === target) {
+                        this.containerId = c.Id;
+                        return true;
+                    }
+                }
+            }
+        } catch {
+            /* ignore */
+        }
+        return false;
+    }
+
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();
         try {
-            const container = this.docker.getContainer(this.containerId);
             let inspect: Docker.ContainerInspectInfo;
             try {
-                inspect = await container.inspect();
+                inspect = await this.docker.getContainer(this.containerId).inspect();
             } catch {
-                return {
-                    checkerName: this.name,
-                    target: this.displayTarget,
-                    isUp: false,
-                    message: 'Контейнер не найден (удалён или недоступен)',
-                    timestamp,
-                };
+                const resolved = await this.tryResolveContainerId();
+                if (!resolved) {
+                    return {
+                        checkerName: this.name,
+                        target: this.displayTarget,
+                        isUp: false,
+                        status: 'missing',
+                        message: 'Контейнер не найден (удалён или недоступен)',
+                        timestamp,
+                    };
+                }
+                try {
+                    inspect = await this.docker.getContainer(this.containerId).inspect();
+                } catch {
+                    return {
+                        checkerName: this.name,
+                        target: this.displayTarget,
+                        isUp: false,
+                        status: 'missing',
+                        message: 'Контейнер не найден после обновления ID',
+                        timestamp,
+                    };
+                }
             }
+
+            const runtimeStatus = formatDockerRuntimeStatus(inspect);
 
             if (!isContainerUnhealthy(inspect)) {
                 this.failureCount = 0;
@@ -96,7 +148,7 @@ export class DockerContainerChecker implements IChecker {
                     checkerName: this.name,
                     target: this.displayTarget,
                     isUp: true,
-                    status: 200,
+                    status: runtimeStatus,
                     timestamp,
                 };
             }
@@ -108,7 +160,7 @@ export class DockerContainerChecker implements IChecker {
                     checkerName: this.name,
                     target: this.displayTarget,
                     isUp: true,
-                    status: 200,
+                    status: runtimeStatus,
                     message: `Временный сбой (${this.failureCount}/${this.confirmThreshold}): ${reason}`,
                     timestamp,
                 };
@@ -118,7 +170,7 @@ export class DockerContainerChecker implements IChecker {
                 checkerName: this.name,
                 target: this.displayTarget,
                 isUp: false,
-                status: 500,
+                status: runtimeStatus,
                 message: reason,
                 timestamp,
             };
@@ -127,6 +179,7 @@ export class DockerContainerChecker implements IChecker {
                 checkerName: this.name,
                 target: this.displayTarget,
                 isUp: false,
+                status: 'docker_api_error',
                 message: `Docker API error: ${error.message}`,
                 timestamp,
             };

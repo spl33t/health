@@ -13,9 +13,10 @@ export interface ICheckResult {
     isUp: boolean;
 
     /**
-     * Дополнительный числовой код (например HTTP-статус ответа); для не-HTTP может отсутствовать.
+     * Дополнительный код состояния: HTTP-статус для URL-проверок; для Docker — строка из API
+     * (например `running (health: healthy)`, `exited`). Может отсутствовать.
      */
-    status?: number;
+    status?: number | string;
 
     /**
      * Текст с деталями: ошибка, метрики, причина сбоя.

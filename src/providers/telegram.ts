@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { IAlertProvider, ICheckResult } from '../types';
+import { formatTimeMoscow } from '../utils/formatTimeMoscow';
 
 export class TelegramProvider implements IAlertProvider {
     name = 'Telegram';
@@ -19,7 +20,7 @@ export class TelegramProvider implements IAlertProvider {
 ${checkerLine}
 <b>Status</b>: ${result.status ?? 'N/A'}
 <b>Message</b>: ${result.message || 'No message'}
-<b>Time</b>: ${result.timestamp.toISOString()}
+<b>Time</b>: ${formatTimeMoscow(result.timestamp)}
     `.trim();
 
         try {

@@ -107,7 +107,18 @@ async function bootstrap() {
         );
     }
 
-    const monitorService = new MonitorService(checkers, alertProviders);
+    const downReminderHours = parseFloat(process.env.ALERT_DOWN_REMINDER_HOURS || '0');
+    const downReminderMs =
+        Number.isFinite(downReminderHours) && downReminderHours > 0
+            ? Math.round(downReminderHours * 3600000)
+            : 0;
+    if (downReminderMs > 0) {
+        console.log(
+            `Повтор алертов при DOWN: каждые ${downReminderHours} ч (ALERT_DOWN_REMINDER_HOURS)`
+        );
+    }
+
+    const monitorService = new MonitorService(checkers, alertProviders, downReminderMs);
 
     async function notifyProviders(result: Pick<ICheckResult, 'checkerName' | 'target' | 'isUp' | 'message'>) {
         if (alertProviders.length === 0) return;

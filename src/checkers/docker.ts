@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import Docker from 'dockerode';
 import { IChecker, ICheckResult } from '../types';
 
@@ -71,13 +72,15 @@ function formatDockerRuntimeStatus(inspect: Docker.ContainerInspectInfo): string
  * Один контейнер = один чекер: независимый статус и алерты.
  */
 export class DockerContainerChecker implements IChecker {
+    readonly id = randomUUID();
+    readonly name = 'Docker';
+
     private failureCount = 0;
 
     constructor(
-        public name: string,
         private docker: Docker,
         private containerId: string,
-        /** Отображается в target алерта */
+        /** Имя контейнера / сервиса в алерте (`target`) */
         private displayTarget: string,
         private confirmThreshold: number,
         public intervalMs: number
@@ -187,15 +190,6 @@ export class DockerContainerChecker implements IChecker {
     }
 }
 
-function uniqueCheckerName(displayName: string, id: string, used: Set<string>): string {
-    let base = `Docker / ${displayName}`;
-    if (used.has(base)) {
-        base = `Docker / ${displayName} (${id.slice(0, 8)})`;
-    }
-    used.add(base);
-    return base;
-}
-
 /**
  * Создаёт по чекеру на каждый подходящий контейнер (список снимается при старте приложения).
  */
@@ -215,14 +209,12 @@ export async function createDockerContainerCheckers(
         return [];
     }
 
-    const picked = new Map<string, { id: string; displayName: string; checkerName: string }>();
-    const usedNames = new Set<string>();
+    const picked = new Map<string, { id: string; displayName: string }>();
 
     if (wantAll) {
         for (const c of list) {
             const displayName = getContainerDisplayName(c);
-            const checkerName = uniqueCheckerName(displayName, c.Id, usedNames);
-            picked.set(c.Id, { id: c.Id, displayName, checkerName });
+            picked.set(c.Id, { id: c.Id, displayName });
         }
     } else {
         for (const pattern of patterns) {
@@ -232,21 +224,12 @@ export async function createDockerContainerCheckers(
             }
             for (const c of matches) {
                 const displayName = getContainerDisplayName(c);
-                const checkerName = uniqueCheckerName(displayName, c.Id, usedNames);
-                picked.set(c.Id, { id: c.Id, displayName, checkerName });
+                picked.set(c.Id, { id: c.Id, displayName });
             }
         }
     }
 
     return Array.from(picked.values()).map(
-        (p) =>
-            new DockerContainerChecker(
-                p.checkerName,
-                docker,
-                p.id,
-                p.displayName,
-                confirmThreshold,
-                intervalMs
-            )
+        (p) => new DockerContainerChecker(docker, p.id, p.displayName, confirmThreshold, intervalMs)
     );
 }

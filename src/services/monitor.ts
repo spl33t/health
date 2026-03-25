@@ -7,7 +7,6 @@ import { ICheckResult, IChecker, IAlertProvider } from '../types';
 export class MonitorService {
     private checkers: IChecker[];
     private alertProviders: IAlertProvider[];
-    // Хранит текущий статус каждого сервиса (true = UP, false = DOWN)
     private statusMap: Map<string, boolean> = new Map();
     /** Время последнего DOWN-алерта (начального или повтора), мс с epoch */
     private lastDownAlertAt: Map<string, number> = new Map();
@@ -26,16 +25,18 @@ export class MonitorService {
         this.alertProviders = alertProviders;
     }
 
+    private logLabel(checker: IChecker): string {
+        return `${checker.name} [${checker.id.slice(0, 8)}]`;
+    }
+
     /**
      * Запускает цикл мониторинга для всех настроенных чекеров.
      */
     public start() {
         console.log('Запуск службы мониторинга...');
         this.checkers.forEach((checker) => {
-            // Изначально считаем, что сервис доступен
-            this.statusMap.set(checker.name, true);
+            this.statusMap.set(checker.id, true);
             this.runCheck(checker);
-            // Установка интервала для последующих проверок
             setInterval(() => this.runCheck(checker), checker.intervalMs);
         });
     }
@@ -44,7 +45,7 @@ export class MonitorService {
      * Выполняет проверку и уведомляет провайдеров при изменении статуса.
      */
     private async runCheck(checker: IChecker) {
-        const key = checker.name;
+        const key = checker.id;
         if (this.checkInFlight.has(key)) {
             return;
         }
@@ -52,25 +53,27 @@ export class MonitorService {
         try {
             const result = await checker.check();
 
-            const previousStatus = this.statusMap.get(checker.name);
+            const previousStatus = this.statusMap.get(checker.id);
             if (result.isUp !== previousStatus) {
-                this.statusMap.set(checker.name, result.isUp);
+                this.statusMap.set(checker.id, result.isUp);
 
-                console.log(`Изменение статуса для ${checker.name}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`);
+                console.log(
+                    `Изменение статуса для ${this.logLabel(checker)}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`
+                );
                 await this.notifyProviders(result);
                 if (result.isUp) {
-                    this.lastDownAlertAt.delete(checker.name);
+                    this.lastDownAlertAt.delete(checker.id);
                 } else {
-                    this.lastDownAlertAt.set(checker.name, Date.now());
+                    this.lastDownAlertAt.set(checker.id, Date.now());
                 }
             } else if (
                 !result.isUp &&
                 previousStatus === false &&
                 this.downReminderIntervalMs > 0
             ) {
-                const last = this.lastDownAlertAt.get(checker.name);
+                const last = this.lastDownAlertAt.get(checker.id);
                 if (last !== undefined && Date.now() - last >= this.downReminderIntervalMs) {
-                    this.lastDownAlertAt.set(checker.name, Date.now());
+                    this.lastDownAlertAt.set(checker.id, Date.now());
                     const repeatMessage = result.message
                         ? `[Повтор, всё ещё DOWN] ${result.message}`
                         : '[Повтор, всё ещё DOWN]';
@@ -79,7 +82,7 @@ export class MonitorService {
                         message: repeatMessage,
                         timestamp: new Date(),
                     });
-                    console.log(`Повтор алерта (DOWN) для ${checker.name}`);
+                    console.log(`Повтор алерта (DOWN) для ${this.logLabel(checker)}`);
                 }
             }
         } finally {
@@ -96,9 +99,13 @@ export class MonitorService {
     }
 
     /**
-     * Возвращает текущую карту статусов всех сервисов.
+     * Текущие статусы по каждому чекеру (ключ — UUID экземпляра).
      */
-    public getStatus() {
-        return Object.fromEntries(this.statusMap);
+    public getStatus(): { id: string; name: string; up: boolean }[] {
+        return this.checkers.map((c) => ({
+            id: c.id,
+            name: c.name,
+            up: this.statusMap.get(c.id) ?? true,
+        }));
     }
 }

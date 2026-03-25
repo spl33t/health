@@ -27,23 +27,26 @@ async function bootstrap() {
         const targets = JSON.parse(targetsRaw);
         if (Array.isArray(targets) && targets.length > 0) {
             targets.forEach((t: any) => {
-                checkers.push(new HttpChecker(t.name, t.url, t.intervalMs));
+                const url = typeof t?.url === 'string' ? t.url : '';
+                if (!url) return;
+                const intervalMs = typeof t.intervalMs === 'number' && t.intervalMs > 0 ? t.intervalMs : 60000;
+                checkers.push(new HttpChecker(url, intervalMs));
             });
         }
     } catch (e) {
         console.error('Ошибка парсинга HTTP_CHECK_TARGETS:', e);
     }
 
-    checkers.push(new DiskChecker('Дисковое пространство', 20, 60000));
-    checkers.push(new RamChecker('Оперативная память', 15, 30000));
-    checkers.push(new CpuChecker('Процессор', 80, 10000));
+    checkers.push(new DiskChecker(20, 60000));
+    checkers.push(new RamChecker(15, 30000));
+    checkers.push(new CpuChecker(80, 10000));
 
     const vkBalanceEnabled =
         process.env.VK_CLOUD_BALANCE_ENABLED === 'true' || process.env.VK_CLOUD_BALANCE_ENABLED === '1';
     const vkEmail = process.env.VK_CLOUD_EMAIL || '';
     const vkPass = process.env.VK_CLOUD_PASS || '';
     if (vkBalanceEnabled && vkEmail && vkPass) {
-        checkers.push(new VkCloudBalanceChecker('VK Cloud', vkEmail, vkPass, 500, 3600000));
+        checkers.push(new VkCloudBalanceChecker(vkEmail, vkPass, 500, 3600000));
     } else if (vkBalanceEnabled && (!vkEmail || !vkPass)) {
         console.warn(
             'VK_CLOUD_BALANCE_ENABLED=true, но VK_CLOUD_EMAIL или VK_CLOUD_PASS не заданы — проверка баланса VK Cloud отключена'
@@ -70,7 +73,9 @@ async function bootstrap() {
                 console.warn('Docker: по DOCKER_TARGETS не найдено контейнеров (или список целей пуст)');
             } else {
                 console.log(
-                    `Docker: ${dockerCheckers.length} отдельных чекеров — ${dockerCheckers.map((c) => c.name).join(', ')}`
+                    `Docker: ${dockerCheckers.length} чекер(ов): ${dockerCheckers
+                        .map((c) => `${c.name}[${c.id.slice(0, 8)}]`)
+                        .join(', ')}`
                 );
             }
         } catch (e) {
@@ -139,7 +144,10 @@ async function bootstrap() {
 
     app.listen(port, async () => {
         console.log(`Сервер Health Monitor запущен на http://localhost:${port}`);
-        console.log('Активные проверки:', checkers.map((c) => c.name).join(', '));
+        console.log(
+            'Активные проверки:',
+            checkers.map((c) => `${c.name}[${c.id.slice(0, 8)}]`).join(', ')
+        );
         await notifyProviders({
             checkerName: 'Система',
             target: 'Health Monitor',

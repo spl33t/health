@@ -4,7 +4,7 @@ async function testCpu() {
     console.log('--- Запуск теста CPU Checker ---');
     console.log('Снимаем первую мерку (нужна пауза для расчета загрузки)...');
 
-    const checker = new CpuChecker('Процессор', 80, 0);
+    const checker = new CpuChecker(80, 0);
 
     // Для CPU нужна задержка между измерениями, так как он считает разницу тиков
     await new Promise(resolve => setTimeout(resolve, 2000));

@@ -15,14 +15,7 @@ async function testVkChecker() {
     }
 
     // Создаем чекер с headless: false, чтобы видеть окно браузера
-    const checker = new VkCloudBalanceChecker(
-        'Тест Баланса',
-        email,
-        pass,
-        6000,
-        0,
-        false // headless = false (отключено, будет видно окно)
-    );
+    const checker = new VkCloudBalanceChecker(email, pass, 6000, 0, false);
 
     console.log('Запуск проверки (это может занять до 2-х минут)...');
     const result = await checker.check();

@@ -10,7 +10,9 @@ async function testDocker() {
         return;
     }
 
-    console.log(`Создано чекеров: ${checkers.length}. Проверка первого: ${checkers[0].name}\n`);
+    console.log(
+        `Создано чекеров: ${checkers.length}. Первый: ${checkers[0].name} [${checkers[0].id.slice(0, 8)}]\n`
+    );
     const result = await checkers[0].check();
 
     const icon = result.isUp ? '✅' : '🚨';

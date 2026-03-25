@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import * as os from 'os';
 import { IChecker, ICheckResult } from '../types';
 
@@ -6,21 +7,23 @@ import { IChecker, ICheckResult } from '../types';
  * Рассчитывает среднюю загрузку по всем ядрам.
  */
 export class CpuChecker implements IChecker {
+    readonly id = randomUUID();
+    readonly name = 'CPU';
+
     private lastMeasure = this.getAverageUsage();
 
     /**
-     * @param name — название чекера
      * @param thresholdPercent — порог загрузки в %; алерт при превышении
      * @param intervalMs — интервал проверки в миллисекундах
      */
     constructor(
-        public name: string,
         public thresholdPercent: number,
         public intervalMs: number
-    ) { }
+    ) {}
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();
+        const target = os.hostname();
         try {
             const currentMeasure = this.getAverageUsage();
 
@@ -29,12 +32,12 @@ export class CpuChecker implements IChecker {
 
             this.lastMeasure = currentMeasure;
 
-            const usagePercent = totalDiff === 0 ? 0 : 100 - (100 * idleDiff / totalDiff);
+            const usagePercent = totalDiff === 0 ? 0 : 100 - (100 * idleDiff) / totalDiff;
             const isOk = usagePercent < this.thresholdPercent;
 
             return {
                 checkerName: this.name,
-                target: `CPU (${this.name})`,
+                target,
                 isUp: isOk,
                 message: isOk
                     ? `Загрузка: ${usagePercent.toFixed(1)}%`
@@ -44,7 +47,7 @@ export class CpuChecker implements IChecker {
         } catch (error: any) {
             return {
                 checkerName: this.name,
-                target: `CPU (${this.name})`,
+                target,
                 isUp: false,
                 message: `Ошибка проверки CPU: ${error.message}`,
                 timestamp,
@@ -66,7 +69,7 @@ export class CpuChecker implements IChecker {
 
         return {
             idle: idle / cpus.length,
-            total: total / cpus.length
+            total: total / cpus.length,
         };
     }
 }

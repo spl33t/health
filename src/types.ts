@@ -3,7 +3,8 @@
  */
 export interface ICheckResult {
     /**
-     * Человекочитаемая цель проверки (URL, имя сервиса, метка диска и т.п.).
+     * Что проверялось: для HTTP — полный URL; для Docker — имя контейнера;
+     * для дисков — маунт/диск или «все локальные»; для CPU/RAM — узел и т.п.
      */
     target: string;
 
@@ -29,7 +30,7 @@ export interface ICheckResult {
     timestamp: Date;
 
     /**
-     * Уникальное имя чекера (совпадает с `IChecker.name`); задаёт сам чекер.
+     * Тип чекера для алертов (HTTP, Docker, CPU, …); совпадает с `IChecker.name`.
      */
     checkerName: string;
 }
@@ -40,7 +41,10 @@ export interface IAlertProvider {
 }
 
 export interface IChecker {
-    name: string;
+    /** Стабильный UUID экземпляра (ключи монитора, логи). */
+    readonly id: string;
+    /** Человекочитаемый тип чекера для алертов (HTTP, Docker, …). */
+    readonly name: string;
     intervalMs: number;
     check(): Promise<ICheckResult>;
 }

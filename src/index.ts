@@ -9,6 +9,7 @@ import { RamChecker } from './checkers/ram';
 import { CpuChecker } from './checkers/cpu';
 import { VkCloudBalanceChecker } from './checkers/vk-cloud-balance';
 import { createDockerContainerCheckers } from './checkers/docker';
+import { ThisAppChecker } from './checkers/this-app';
 import { IChecker, IAlertProvider, ICheckResult } from './types';
 
 async function bootstrap() {
@@ -110,6 +111,15 @@ async function bootstrap() {
         console.warn(
             'EMAIL_ENABLED=true, но SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM или EMAIL_TO не заданы — email-уведомления отключены'
         );
+    }
+
+    const appHealthPingRaw = (process.env.APP_HEALTH_PING_MINUTES || '').trim();
+    const parsedHealthPingMinutes = appHealthPingRaw ? parseFloat(appHealthPingRaw) : 60;
+    const healthPingMinutes = Number.isFinite(parsedHealthPingMinutes) ? parsedHealthPingMinutes : 60;
+    const healthPingIntervalMs = healthPingMinutes > 0 ? Math.round(healthPingMinutes * 60000) : 0;
+    if (healthPingIntervalMs > 0) {
+        checkers.push(new ThisAppChecker(healthPingIntervalMs));
+        console.log(`Heartbeat: каждые ${healthPingMinutes} мин (APP_HEALTH_PING_MINUTES)`);
     }
 
     const downReminderHours = parseFloat(process.env.ALERT_DOWN_REMINDER_HOURS || '0');

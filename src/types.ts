@@ -45,6 +45,7 @@ export interface IChecker {
     readonly id: string;
     /** Человекочитаемый тип чекера для алертов (HTTP, Docker, …). */
     readonly name: string;
+    readonly notifyAlways?: boolean;
     intervalMs: number;
     check(): Promise<ICheckResult>;
 }

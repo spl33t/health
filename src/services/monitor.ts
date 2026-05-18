@@ -54,18 +54,24 @@ export class MonitorService {
             const result = await checker.check();
 
             const previousStatus = this.statusMap.get(checker.id);
-            if (result.isUp !== previousStatus) {
+            const statusChanged = result.isUp !== previousStatus;
+            const shouldNotify = statusChanged || checker.notifyAlways === true;
+
+            if (statusChanged) {
                 this.statusMap.set(checker.id, result.isUp);
 
                 console.log(
                     `Изменение статуса для ${this.logLabel(checker)}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`
                 );
-                await this.notifyProviders(result);
                 if (result.isUp) {
                     this.lastDownAlertAt.delete(checker.id);
                 } else {
                     this.lastDownAlertAt.set(checker.id, Date.now());
                 }
+            }
+
+            if (shouldNotify) {
+                await this.notifyProviders(result);
             } else if (
                 !result.isUp &&
                 previousStatus === false &&

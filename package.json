@@ -10,6 +10,7 @@
     "": "----- Tests -----",
     "test:vk": "ts-node tests/vk-cloud-balance.ts",
     "test:tg": "ts-node tests/telegram.ts",
+    "test:email": "ts-node tests/email.ts",
     "test:http": "ts-node tests/http.ts",
     "test:disk": "ts-node tests/disk.ts",
     "test:ram": "ts-node tests/ram.ts",

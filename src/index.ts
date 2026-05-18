@@ -102,12 +102,23 @@ async function bootstrap() {
     const smtpUser = process.env.SMTP_USER || '';
     const smtpPass = process.env.SMTP_PASS || '';
     const emailFrom = process.env.EMAIL_FROM || '';
-    const emailTo = process.env.EMAIL_TO || '';
-    if (emailEnabled && smtpHost && smtpUser && smtpPass && emailFrom && emailTo) {
+    const emailToRaw = process.env.EMAIL_TO || '';
+    const emailToList = emailToRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (emailEnabled && smtpHost && smtpUser && smtpPass && emailFrom && emailToList.length > 0) {
         alertProviders.push(
-            new EmailProvider({ host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPass, from: emailFrom, to: emailTo })
+            new EmailProvider({
+                host: smtpHost,
+                port: smtpPort,
+                user: smtpUser,
+                pass: smtpPass,
+                from: emailFrom,
+                to: emailToList,
+            })
         );
-    } else if (emailEnabled && (!smtpHost || !smtpUser || !smtpPass || !emailFrom || !emailTo)) {
+    } else if (emailEnabled && (!smtpHost || !smtpUser || !smtpPass || !emailFrom || emailToList.length === 0)) {
         console.warn(
             'EMAIL_ENABLED=true, но SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM или EMAIL_TO не заданы — email-уведомления отключены'
         );
@@ -158,12 +169,6 @@ async function bootstrap() {
             'Активные проверки:',
             checkers.map((c) => `${c.name}[${c.id.slice(0, 8)}]`).join(', ')
         );
-        await notifyProviders({
-            checkerName: 'Система',
-            target: 'Health Monitor',
-            isUp: true,
-            message: 'Health Monitor запущен и работает',
-        });
         monitorService.start();
     });
 

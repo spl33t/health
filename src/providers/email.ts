@@ -8,7 +8,7 @@ export interface EmailProviderConfig {
     user: string;
     pass: string;
     from: string;
-    to: string;
+    to: string | string[];
     secure?: boolean;
 }
 
@@ -16,7 +16,7 @@ export class EmailProvider implements IAlertProvider {
     name = 'Email';
     private transporter: nodemailer.Transporter;
     private from: string;
-    private to: string;
+    private to: string | string[];
 
     constructor(config: EmailProviderConfig) {
         this.transporter = nodemailer.createTransport({

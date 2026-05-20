@@ -12,6 +12,9 @@ import { createDockerContainerCheckers } from './checkers/docker';
 import { ThisAppChecker } from './checkers/this-app';
 import { SmartDiskCleanupCommand } from './commands/smart-disk-cleanup';
 import { ICheckResult } from './types';
+import { formatTimeMoscow, formatUptime } from './utils/formatTimeMoscow';
+import { withMachineBootEvent } from './utils/machineBoot';
+import { registerShutdownHandler } from './utils/shutdown';
 import { hoursToMs, minutesToMs } from './utils/parseHours';
 
 async function bootstrap() {
@@ -187,32 +190,43 @@ async function bootstrap() {
             'Активные проверки:',
             monitorService.getCheckers().map((c) => `${c.name}[${c.id.slice(0, 8)}]`).join(', ')
         );
+        await withMachineBootEvent({
+            onEvent: async (event) => {
+                const lines: string[] = [];
+                if (event.kind === 'reboot') {
+                    lines.push('Обнаружена перезагрузка машины (boot_id изменился).');
+                    if (event.previousBootId) lines.push(`Предыдущий boot_id: ${event.previousBootId}`);
+                } else {
+                    lines.push('Health app first run (первое наблюдение boot_id).');
+                }
+                lines.push(`Текущий boot_id: ${event.bootId}`);
+                lines.push(`Uptime хоста: ${formatUptime(event.hostUptimeSeconds)}`);
+                if (event.bootTime) lines.push(`Время загрузки: ${formatTimeMoscow(event.bootTime)}`);
+                lines.push(`Время запуска Health Monitor: ${event.observedAt.toISOString()}`);
+
+                const message = lines.join('\n');
+                for (const provider of monitorService.getProviders()) {
+                    try {
+                        await provider.sendMessage(message);
+                    } catch (e) { }
+                }
+            },
+        });
         monitorService.start();
     });
 
-    let isShuttingDown = false;
-    async function shutdown(signal: string) {
-        if (isShuttingDown) return;
-        isShuttingDown = true;
-        console.log(`Получен ${signal}, завершение...`);
-        try {
-            await Promise.race([
-                notifyProviders({
-                    checkerName: 'Система',
-                    target: 'Health Monitor',
-                    isUp: false,
-                    message: 'Health Monitor остановлен',
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
-            ]);
-        } catch (e) {
-            // ignore
-        } finally {
-            process.exit(0);
-        }
-    }
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    registerShutdownHandler({
+        onShutdown: async () => {
+            await notifyProviders({
+                checkerName: 'Система',
+                target: 'Health Monitor',
+                isUp: false,
+                message: 'Health Monitor остановлен',
+            });
+        },
+        timeoutMs: 5000,
+        exitCode: 0,
+    });
 }
 
 bootstrap().catch((err) => {

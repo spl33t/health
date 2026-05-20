@@ -29,11 +29,13 @@ export class VkCloudBalanceChecker extends BaseChecker {
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();
         const target = 'https://cloud.vk.com';
-        const browser = await chromium.launch({ headless: this.headless });
-        const context = await browser.newContext();
-        const page = await context.newPage();
+        let browser: any;
+        let page: any;
 
         try {
+            browser = await chromium.launch({ headless: this.headless });
+            const context = await browser.newContext();
+            page = await context.newPage();
             await page.goto('https://cloud.vk.com/authapp/signin', { waitUntil: 'networkidle' });
 
             await page.waitForSelector('input[name="email"]');
@@ -54,8 +56,6 @@ export class VkCloudBalanceChecker extends BaseChecker {
                 await page.waitForTimeout(5000);
             }
 
-            await browser.close();
-
             return {
                 checkerName: this.name,
                 target,
@@ -66,17 +66,26 @@ export class VkCloudBalanceChecker extends BaseChecker {
                 timestamp,
             };
         } catch (error: any) {
-            if (!this.headless) {
-                await page.waitForTimeout(5000);
-            }
-            await browser.close();
+            const text = String(error?.message ?? error);
+            const hint = text.includes("Executable doesn't exist")
+                ? 'Playwright browser не установлен (нужно playwright install chromium)'
+                : text;
             return {
                 checkerName: this.name,
                 target,
                 isUp: false,
-                message: `Ошибка скрапинга баланса VK Cloud: ${error.message}`,
+                message: `Ошибка скрапинга баланса VK Cloud: ${hint}`,
                 timestamp,
             };
+        } finally {
+            try {
+                if (!this.headless && page) {
+                    await page.waitForTimeout(5000);
+                }
+            } catch (e) { }
+            try {
+                await browser?.close?.();
+            } catch (e) { }
         }
     }
 }

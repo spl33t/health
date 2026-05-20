@@ -1,13 +1,12 @@
-import { randomUUID } from 'crypto';
 import { chromium } from 'playwright';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 
 /**
  * Чекер для проверки баланса VK Cloud.
  * Использует Playwright для имитации входа в личный кабинет и скрапинга баланса.
  */
-export class VkCloudBalanceChecker implements IChecker {
-    readonly id = randomUUID();
+export class VkCloudBalanceChecker extends BaseChecker {
     readonly name = 'VK Cloud Balance';
 
     /**
@@ -21,9 +20,11 @@ export class VkCloudBalanceChecker implements IChecker {
         private email: string,
         private pass: string,
         public threshold: number,
-        public intervalMs: number,
+        intervalMs: number,
         private headless: boolean = true
-    ) {}
+    ) {
+        super(intervalMs);
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

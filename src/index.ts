@@ -10,7 +10,9 @@ import { CpuChecker } from './checkers/cpu';
 import { VkCloudBalanceChecker } from './checkers/vk-cloud-balance';
 import { createDockerContainerCheckers } from './checkers/docker';
 import { ThisAppChecker } from './checkers/this-app';
-import { IChecker, IAlertProvider, ICheckResult } from './types';
+import { SmartDiskCleanupCommand } from './commands/smart-disk-cleanup';
+import { ICheckResult } from './types';
+import { hoursToMs, minutesToMs } from './utils/parseHours';
 
 async function bootstrap() {
     dotenv.config();
@@ -18,11 +20,17 @@ async function bootstrap() {
     const app = express();
     const port = process.env.PORT || 3000;
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-    const chatId = process.env.TELEGRAM_CHAT_ID || '';
-    const targetsRaw = process.env.HTTP_CHECK_TARGETS || '[]';
+    const downReminderHours = process.env.ALERT_DOWN_REMINDER_HOURS;
+    const downReminderMs = hoursToMs(downReminderHours, 1);
+    if (downReminderMs > 0 && downReminderHours) {
+        console.log(
+            `Повтор алертов при DOWN: каждые ${downReminderHours} ч (ALERT_DOWN_REMINDER_HOURS)`
+        );
+    }
 
-    const checkers: IChecker[] = [];
+    const monitorService = new MonitorService(downReminderMs);
+
+    const targetsRaw = process.env.HTTP_CHECK_TARGETS || '[]';
 
     try {
         const targets = JSON.parse(targetsRaw);
@@ -31,23 +39,48 @@ async function bootstrap() {
                 const url = typeof t?.url === 'string' ? t.url : '';
                 if (!url) return;
                 const intervalMs = typeof t.intervalMs === 'number' && t.intervalMs > 0 ? t.intervalMs : 60000;
-                checkers.push(new HttpChecker(url, intervalMs));
+                const checker = new HttpChecker(url, intervalMs);
+                monitorService.addChecker(checker);
             });
         }
     } catch (e) {
         console.error('Ошибка парсинга HTTP_CHECK_TARGETS:', e);
     }
 
-    checkers.push(new DiskChecker(20, 60000));
-    checkers.push(new RamChecker(15, 30000));
-    checkers.push(new CpuChecker(80, 10000));
+    const diskChecker = new DiskChecker(20, 60000, undefined, {
+        onDown: async () => {
+            const command = new SmartDiskCleanupCommand();
+            const output = await command.execute({
+                targetPath: '/',
+                stopWhenFreePercentAtLeast: 25,
+                journalVacuumDays: 30,
+                aptClean: true,
+                dockerBuilderKeepStorage: '2GB',
+            });
+            const message = `Disk DOWN detected.\nSmart cleanup executed.\nTime: ${new Date().toISOString()}\n\n${output}`;
+
+            for (const provider of monitorService.getProviders()) {
+                try {
+                    await provider.sendMessage(message);
+                } catch (e) { }
+            }
+        },
+    });
+    monitorService.addChecker(diskChecker);
+
+    const ramChecker = new RamChecker(15, 30000);
+    monitorService.addChecker(ramChecker);
+
+    const cpuChecker = new CpuChecker(80, 10000);
+    monitorService.addChecker(cpuChecker);
 
     const vkBalanceEnabled =
         process.env.VK_CLOUD_BALANCE_ENABLED === 'true' || process.env.VK_CLOUD_BALANCE_ENABLED === '1';
     const vkEmail = process.env.VK_CLOUD_EMAIL || '';
     const vkPass = process.env.VK_CLOUD_PASS || '';
     if (vkBalanceEnabled && vkEmail && vkPass) {
-        checkers.push(new VkCloudBalanceChecker(vkEmail, vkPass, 500, 3600000));
+        const checker = new VkCloudBalanceChecker(vkEmail, vkPass, 500, 3600000)
+        monitorService.addChecker(checker);
     } else if (vkBalanceEnabled && (!vkEmail || !vkPass)) {
         console.warn(
             'VK_CLOUD_BALANCE_ENABLED=true, но VK_CLOUD_EMAIL или VK_CLOUD_PASS не заданы — проверка баланса VK Cloud отключена'
@@ -69,7 +102,7 @@ async function bootstrap() {
                 dockerConfirmThreshold,
                 30000
             );
-            checkers.push(...dockerCheckers);
+            dockerCheckers.forEach((c) => monitorService.addChecker(c));
             if (dockerCheckers.length === 0) {
                 console.warn('Docker: по DOCKER_TARGETS не найдено контейнеров (или список целей пуст)');
             } else {
@@ -84,12 +117,12 @@ async function bootstrap() {
         }
     }
 
-    const alertProviders: IAlertProvider[] = [];
-
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+    const chatId = process.env.TELEGRAM_CHAT_ID || '';
     const telegramEnabled =
         process.env.TELEGRAM_ENABLED === 'true' || process.env.TELEGRAM_ENABLED === '1';
     if (telegramEnabled && botToken && chatId) {
-        alertProviders.push(new TelegramProvider(botToken, chatId));
+        monitorService.addProvider(new TelegramProvider(botToken, chatId));
     } else if (telegramEnabled && (!botToken || !chatId)) {
         console.warn(
             'TELEGRAM_ENABLED=true, но TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID не заданы — Telegram-уведомления отключены'
@@ -108,7 +141,7 @@ async function bootstrap() {
         .map((s) => s.trim())
         .filter(Boolean);
     if (emailEnabled && smtpHost && smtpUser && smtpPass && emailFrom && emailToList.length > 0) {
-        alertProviders.push(
+        monitorService.addProvider(
             new EmailProvider({
                 host: smtpHost,
                 port: smtpPort,
@@ -124,32 +157,17 @@ async function bootstrap() {
         );
     }
 
-    const appHealthPingRaw = (process.env.APP_HEALTH_PING_MINUTES || '').trim();
-    const parsedHealthPingMinutes = appHealthPingRaw ? parseFloat(appHealthPingRaw) : 60;
-    const healthPingMinutes = Number.isFinite(parsedHealthPingMinutes) ? parsedHealthPingMinutes : 60;
-    const healthPingIntervalMs = healthPingMinutes > 0 ? Math.round(healthPingMinutes * 60000) : 0;
+    const healthPingMinutes = process.env.APP_HEALTH_PING_MINUTES ?? 60;
+    const healthPingIntervalMs = minutesToMs(healthPingMinutes, 60);
     if (healthPingIntervalMs > 0) {
-        checkers.push(new ThisAppChecker(healthPingIntervalMs));
+        const checker = new ThisAppChecker(healthPingIntervalMs);
+        monitorService.addChecker(checker);
         console.log(`Heartbeat: каждые ${healthPingMinutes} мин (APP_HEALTH_PING_MINUTES)`);
     }
 
-    const downReminderHours = parseFloat(process.env.ALERT_DOWN_REMINDER_HOURS || '0');
-    const downReminderMs =
-        Number.isFinite(downReminderHours) && downReminderHours > 0
-            ? Math.round(downReminderHours * 3600000)
-            : 0;
-    if (downReminderMs > 0) {
-        console.log(
-            `Повтор алертов при DOWN: каждые ${downReminderHours} ч (ALERT_DOWN_REMINDER_HOURS)`
-        );
-    }
-
-    const monitorService = new MonitorService(checkers, alertProviders, downReminderMs);
-
     async function notifyProviders(result: Pick<ICheckResult, 'checkerName' | 'target' | 'isUp' | 'message'>) {
-        if (alertProviders.length === 0) return;
         const payload: ICheckResult = { ...result, timestamp: new Date() };
-        await Promise.allSettled(alertProviders.map((p) => p.sendAlert(payload)));
+        await monitorService.sendAlert(payload);
     }
 
     app.get('/status', (req: Request, res: Response) => {
@@ -167,7 +185,7 @@ async function bootstrap() {
         console.log(`Сервер Health Monitor запущен на http://localhost:${port}`);
         console.log(
             'Активные проверки:',
-            checkers.map((c) => `${c.name}[${c.id.slice(0, 8)}]`).join(', ')
+            monitorService.getCheckers().map((c) => `${c.name}[${c.id.slice(0, 8)}]`).join(', ')
         );
         monitorService.start();
     });

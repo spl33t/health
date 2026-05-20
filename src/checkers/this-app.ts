@@ -1,14 +1,14 @@
-import { randomUUID } from 'crypto';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 import { formatUptime } from '../utils/formatTimeMoscow';
 
-export class ThisAppChecker implements IChecker {
-    readonly id = randomUUID();
+export class ThisAppChecker extends BaseChecker {
     readonly name = 'App health';
-    readonly notifyAlways = true;
     private isFirstRun = true;
 
-    constructor(public intervalMs: number) { }
+    constructor(intervalMs: number) {
+        super(intervalMs, { notifyAlways: true });
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

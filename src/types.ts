@@ -34,23 +34,3 @@ export interface ICheckResult {
      */
     checkerName: string;
 }
-
-export interface IAlertProvider {
-    name: string;
-    sendAlert(result: ICheckResult): Promise<void>;
-}
-
-export interface IChecker {
-    /** Стабильный UUID экземпляра (ключи монитора, логи). */
-    readonly id: string;
-    /** Человекочитаемый тип чекера для алертов (HTTP, Docker, …). */
-    readonly name: string;
-    readonly notifyAlways?: boolean;
-    intervalMs: number;
-    check(): Promise<ICheckResult>;
-}
-
-export interface IMonitorConfig {
-    checkers: IChecker[];
-    alertProviders: IAlertProvider[];
-}

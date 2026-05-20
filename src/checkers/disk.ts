@@ -1,13 +1,12 @@
-import { randomUUID } from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker, BaseCheckerOptions } from './base-checker';
+import { ICheckResult } from '../types';
 
 const execAsync = promisify(exec);
 
-export class DiskChecker implements IChecker {
-    readonly id = randomUUID();
+export class DiskChecker extends BaseChecker {
     readonly name = 'Disk';
 
     /**
@@ -17,9 +16,12 @@ export class DiskChecker implements IChecker {
      */
     constructor(
         public thresholdPercent: number,
-        public intervalMs: number,
-        public drive?: string
-    ) {}
+        intervalMs: number,
+        public drive?: string,
+        options?: Pick<BaseCheckerOptions, 'onDown'>
+    ) {
+        super(intervalMs, options);
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

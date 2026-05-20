@@ -1,12 +1,11 @@
-import { randomUUID } from 'crypto';
 import * as os from 'os';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 
 /**
  * Чекер для мониторинга свободной оперативной памяти (RAM).
  */
-export class RamChecker implements IChecker {
-    readonly id = randomUUID();
+export class RamChecker extends BaseChecker {
     readonly name = 'RAM';
 
     /**
@@ -15,8 +14,10 @@ export class RamChecker implements IChecker {
      */
     constructor(
         public thresholdPercent: number,
-        public intervalMs: number
-    ) {}
+        intervalMs: number
+    ) {
+        super(intervalMs);
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

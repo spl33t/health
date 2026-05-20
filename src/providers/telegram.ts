@@ -1,15 +1,28 @@
 import axios from 'axios';
-import { IAlertProvider, ICheckResult } from '../types';
+import { ICheckResult } from '../types';
 import { formatTimeMoscow } from '../utils/formatTimeMoscow';
+import { BaseAlertProvider } from './base-provider';
 
-export class TelegramProvider implements IAlertProvider {
+export class TelegramProvider extends BaseAlertProvider {
     name = 'Telegram';
     private botToken: string;
     private chatId: string;
 
     constructor(botToken: string, chatId: string) {
+        super();
         this.botToken = botToken;
         this.chatId = chatId;
+    }
+
+    async sendMessage(message: string): Promise<void> {
+        try {
+            await axios.post(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+                chat_id: this.chatId,
+                text: message,
+            });
+        } catch (error: any) {
+            console.error('Failed to send Telegram message:', this.formatSendError(error));
+        }
     }
 
     async sendAlert(result: ICheckResult): Promise<void> {
@@ -30,7 +43,7 @@ ${checkerLine}
                 parse_mode: 'HTML',
             });
         } catch (error: any) {
-            console.error('Failed to send Telegram alert:', error.response?.data || error.message);
+            console.error('Failed to send Telegram alert:', this.formatSendError(error));
         }
     }
 }

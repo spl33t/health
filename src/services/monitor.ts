@@ -1,31 +1,68 @@
-import { ICheckResult, IChecker, IAlertProvider } from '../types';
+import { BaseChecker } from '../checkers/base-checker';
+import { BaseAlertProvider } from '../providers/base-provider';
+import { ICheckResult } from '../types';
 
 /**
  * Сервис мониторинга, отвечающий за периодическую проверку целей
  * и уведомление провайдеров алертов при изменении статуса.
  */
 export class MonitorService {
-    private checkers: IChecker[];
-    private alertProviders: IAlertProvider[];
-    private statusMap: Map<string, boolean> = new Map();
-    /** Время последнего DOWN-алерта (начального или повтора), мс с epoch */
-    private lastDownAlertAt: Map<string, number> = new Map();
-    /** Не допускаем параллельных runCheck для одного чекера (setInterval без await). */
-    private checkInFlight: Set<string> = new Set();
+    private checkers: BaseChecker[] = [];
+    private alertProviders: BaseAlertProvider[] = [];
+    private started = false;
+    private intervalsByCheckerId: Map<string, NodeJS.Timeout> = new Map();
 
     /**
      * @param downReminderIntervalMs интервал повторной рассылки при устойчивом DOWN (0 — отключено)
      */
     constructor(
-        checkers: IChecker[],
-        alertProviders: IAlertProvider[],
         private downReminderIntervalMs: number = 0
     ) {
-        this.checkers = checkers;
-        this.alertProviders = alertProviders;
     }
 
-    private logLabel(checker: IChecker): string {
+    public addChecker(checker: BaseChecker) {
+        if (this.checkers.some((c) => c.id === checker.id)) return;
+        this.checkers.push(checker);
+        if (this.started) {
+            checker.lastIsUp = true;
+            this.runCheck(checker);
+            const interval = setInterval(() => this.runCheck(checker), checker.intervalMs);
+            this.intervalsByCheckerId.set(checker.id, interval);
+        }
+    }
+
+    public getCheckers(): BaseChecker[] {
+        return [...this.checkers];
+    }
+
+    public removeChecker(checkerOrId: BaseChecker | string): boolean {
+        const id = typeof checkerOrId === 'string' ? checkerOrId : checkerOrId.id;
+        const before = this.checkers.length;
+        this.checkers = this.checkers.filter((c) => c.id !== id);
+        const interval = this.intervalsByCheckerId.get(id);
+        if (interval) {
+            clearInterval(interval);
+            this.intervalsByCheckerId.delete(id);
+        }
+        return this.checkers.length !== before;
+    }
+
+    public addProvider(provider: BaseAlertProvider) {
+        if (this.alertProviders.includes(provider)) return;
+        this.alertProviders.push(provider);
+    }
+
+    public removeProvider(provider: BaseAlertProvider): boolean {
+        const before = this.alertProviders.length;
+        this.alertProviders = this.alertProviders.filter((p) => p !== provider);
+        return this.alertProviders.length !== before;
+    }
+
+    public getProviders(): BaseAlertProvider[] {
+        return [...this.alertProviders];
+    }
+
+    private logLabel(checker: BaseChecker): string {
         return `${checker.name} [${checker.id.slice(0, 8)}]`;
     }
 
@@ -33,73 +70,52 @@ export class MonitorService {
      * Запускает цикл мониторинга для всех настроенных чекеров.
      */
     public start() {
+        if (this.started) return;
+        this.started = true;
         console.log('Запуск службы мониторинга...');
         this.checkers.forEach((checker) => {
-            this.statusMap.set(checker.id, true);
+            checker.lastIsUp = true;
             this.runCheck(checker);
-            setInterval(() => this.runCheck(checker), checker.intervalMs);
+            const interval = setInterval(() => this.runCheck(checker), checker.intervalMs);
+            this.intervalsByCheckerId.set(checker.id, interval);
         });
     }
 
     /**
      * Выполняет проверку и уведомляет провайдеров при изменении статуса.
      */
-    private async runCheck(checker: IChecker) {
-        const key = checker.id;
-        if (this.checkInFlight.has(key)) {
-            return;
+    private async runCheck(checker: BaseChecker) {
+        const run = await checker.run();
+        if (!run) return;
+        const { result, previousIsUp, statusChanged, shouldNotify } = run;
+
+        if (statusChanged) {
+            console.log(
+                `Изменение статуса для ${this.logLabel(checker)}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`
+            );
         }
-        this.checkInFlight.add(key);
-        try {
-            const result = await checker.check();
 
-            const previousStatus = this.statusMap.get(checker.id);
-            const statusChanged = result.isUp !== previousStatus;
-            const shouldNotify = statusChanged || checker.notifyAlways === true;
-
-            if (statusChanged) {
-                this.statusMap.set(checker.id, result.isUp);
-
-                console.log(
-                    `Изменение статуса для ${this.logLabel(checker)}: ${result.isUp ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'}`
-                );
-                if (result.isUp) {
-                    this.lastDownAlertAt.delete(checker.id);
-                } else {
-                    this.lastDownAlertAt.set(checker.id, Date.now());
-                }
+        if (shouldNotify) {
+            await this.sendAlert(result);
+        } else if (!result.isUp && previousIsUp === false && this.downReminderIntervalMs > 0) {
+            const last = checker.lastDownAlertAt;
+            if (last !== undefined && Date.now() - last >= this.downReminderIntervalMs) {
+                checker.lastDownAlertAt = Date.now();
+                const repeatMessage = result.message ? `[Повтор, всё ещё DOWN] ${result.message}` : '[Повтор, всё ещё DOWN]';
+                await this.sendAlert({
+                    ...result,
+                    message: repeatMessage,
+                    timestamp: new Date(),
+                });
+                console.log(`Повтор алерта (DOWN) для ${this.logLabel(checker)}`);
             }
-
-            if (shouldNotify) {
-                await this.notifyProviders(result);
-            } else if (
-                !result.isUp &&
-                previousStatus === false &&
-                this.downReminderIntervalMs > 0
-            ) {
-                const last = this.lastDownAlertAt.get(checker.id);
-                if (last !== undefined && Date.now() - last >= this.downReminderIntervalMs) {
-                    this.lastDownAlertAt.set(checker.id, Date.now());
-                    const repeatMessage = result.message
-                        ? `[Повтор, всё ещё DOWN] ${result.message}`
-                        : '[Повтор, всё ещё DOWN]';
-                    await this.notifyProviders({
-                        ...result,
-                        message: repeatMessage,
-                        timestamp: new Date(),
-                    });
-                    console.log(`Повтор алерта (DOWN) для ${this.logLabel(checker)}`);
-                }
-            }
-        } finally {
-            this.checkInFlight.delete(key);
         }
     }
 
     /**
      * Рассылает уведомление всем настроенным провайдерам алертов.
      */
-    private async notifyProviders(result: ICheckResult) {
+    public async sendAlert(result: ICheckResult) {
         const promises = this.alertProviders.map((provider) => provider.sendAlert(result));
         await Promise.allSettled(promises);
     }
@@ -111,7 +127,7 @@ export class MonitorService {
         return this.checkers.map((c) => ({
             id: c.id,
             name: c.name,
-            up: this.statusMap.get(c.id) ?? true,
+            up: c.lastIsUp ?? true,
         }));
     }
 }

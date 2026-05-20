@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto';
 import Docker from 'dockerode';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 
 interface ContainerInspectState {
     Status?: string;
@@ -71,8 +71,7 @@ function formatDockerRuntimeStatus(inspect: Docker.ContainerInspectInfo): string
 /**
  * Один контейнер = один чекер: независимый статус и алерты.
  */
-export class DockerContainerChecker implements IChecker {
-    readonly id = randomUUID();
+export class DockerContainerChecker extends BaseChecker {
     readonly name = 'Docker';
 
     private failureCount = 0;
@@ -83,8 +82,10 @@ export class DockerContainerChecker implements IChecker {
         /** Имя контейнера / сервиса в алерте (`target`) */
         private displayTarget: string,
         private confirmThreshold: number,
-        public intervalMs: number
-    ) {}
+        intervalMs: number
+    ) {
+        super(intervalMs);
+    }
 
     /**
      * После recreate контейнер получает новый ID — ищем актуальный по имени/target.
@@ -198,7 +199,7 @@ export async function createDockerContainerCheckers(
     targets: string[],
     confirmThreshold: number,
     intervalMs: number
-): Promise<IChecker[]> {
+): Promise<BaseChecker[]> {
     const docker = new Docker(socketPath ? { socketPath } : undefined);
     const list = await docker.listContainers({ all: true });
 

@@ -1,13 +1,12 @@
-import { randomUUID } from 'crypto';
 import * as os from 'os';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 
 /**
  * Чекер для мониторинга загрузки процессора (CPU).
  * Рассчитывает среднюю загрузку по всем ядрам.
  */
-export class CpuChecker implements IChecker {
-    readonly id = randomUUID();
+export class CpuChecker extends BaseChecker {
     readonly name = 'CPU';
 
     private lastMeasure = this.getAverageUsage();
@@ -18,8 +17,10 @@ export class CpuChecker implements IChecker {
      */
     constructor(
         public thresholdPercent: number,
-        public intervalMs: number
-    ) {}
+        intervalMs: number
+    ) {
+        super(intervalMs);
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

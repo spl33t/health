@@ -1,9 +1,8 @@
-import { randomUUID } from 'crypto';
 import axios from 'axios';
-import { IChecker, ICheckResult } from '../types';
+import { BaseChecker } from './base-checker';
+import { ICheckResult } from '../types';
 
-export class HttpChecker implements IChecker {
-    readonly id = randomUUID();
+export class HttpChecker extends BaseChecker {
     readonly name = 'HTTP';
 
     /**
@@ -12,8 +11,10 @@ export class HttpChecker implements IChecker {
      */
     constructor(
         public url: string,
-        public intervalMs: number
-    ) {}
+        intervalMs: number
+    ) {
+        super(intervalMs);
+    }
 
     async check(): Promise<ICheckResult> {
         const timestamp = new Date();

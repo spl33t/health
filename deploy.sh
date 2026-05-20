@@ -33,6 +33,14 @@ if [[ "$OSTYPE" == linux-gnu* ]] && command -v systemctl >/dev/null 2>&1; then
         exit 1
     fi
     
+    LOG_DIR="${SCRIPT_DIR}/logs"
+    mkdir -p "$LOG_DIR"
+    if [[ "$(id -u)" -eq 0 ]]; then
+        chown -R "$TARGET_USER":"$TARGET_USER" "$LOG_DIR" 2>/dev/null || true
+        elif command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$TARGET_USER":"$TARGET_USER" "$LOG_DIR" 2>/dev/null || true
+    fi
+    
     UNIT_NAME="health-monitor.service"
     UNIT_PATH="/etc/systemd/system/${UNIT_NAME}"
     UNIT_TMP="$(mktemp)"
@@ -48,6 +56,8 @@ Type=simple
 User=${TARGET_USER}
 WorkingDirectory=${SCRIPT_DIR}
 ExecStart=${NODE_BIN} ${SCRIPT_DIR}/dist/index.js
+StandardOutput=append:${LOG_DIR}/app.log
+StandardError=append:${LOG_DIR}/app.err.log
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production

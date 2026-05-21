@@ -50,6 +50,8 @@ if [[ "$OSTYPE" == linux-gnu* ]] && command -v systemctl >/dev/null 2>&1; then
     UNIT_PATH="/etc/systemd/system/${UNIT_NAME}"
     UNIT_TMP="$(mktemp)"
     
+    EXEC_START_CMD='set -euo pipefail; mkdir -p "$LOG_DIR"; TS=$(date +%%Y-%%m-%%d_%%H-%%M-%%S); LOG_FILE="$LOG_DIR/${TS}.log"; echo "Logging to $LOG_FILE"; '"${NODE_BIN}"' '"${SCRIPT_DIR}"'/dist/user/index.js 2>&1 | tee -a "$LOG_FILE"'
+    
     cat > "$UNIT_TMP" <<EOF
 [Unit]
 Description=health-monitor
@@ -62,7 +64,7 @@ User=${TARGET_USER}
 SupplementaryGroups=docker
 WorkingDirectory=${SCRIPT_DIR}
 Environment=LOG_DIR=${LOG_DIR}
-ExecStart=/bin/bash -lc 'set -euo pipefail; mkdir -p "$LOG_DIR"; TS=$(date +%%Y-%%m-%%d_%%H-%%M-%%S); LOG_FILE="$LOG_DIR/${TS}.log"; echo "Logging to $LOG_FILE"; ${NODE_BIN} ${SCRIPT_DIR}/dist/user/index.js 2>&1 | tee -a "$LOG_FILE"'
+ExecStart=/bin/bash -lc '${EXEC_START_CMD}'
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production

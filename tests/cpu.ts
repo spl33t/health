@@ -1,4 +1,4 @@
-import { CpuChecker } from '../src/checkers/cpu';
+import { CpuChecker } from '../core/checkers/cpu';
 
 async function testCpu() {
     console.log('--- Запуск теста CPU Checker ---');

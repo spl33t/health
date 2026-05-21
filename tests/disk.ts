@@ -1,4 +1,4 @@
-import { DiskChecker } from '../src/checkers/disk';
+import { DiskChecker } from '../core/checkers/disk';
 
 async function testDisk() {
     console.log('--- Запуск теста Disk Checker ---');

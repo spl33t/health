@@ -1,4 +1,4 @@
-import { createDockerContainerCheckers } from '../src/checkers/docker';
+import { createDockerContainerCheckers } from '../core/checkers/docker';
 
 async function testDocker() {
     console.log('--- Запуск теста Docker Checker ---');

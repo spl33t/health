@@ -100,7 +100,7 @@ export async function withMachineBootEvent(args: {
     const bootId = await readLinuxBootId();
     if (!bootId) return false;
 
-    const stateFilePath = args.stateFilePath ?? path.join(process.cwd(), 'state', 'health-state.json');
+    const stateFilePath = args.stateFilePath ?? path.join(process.cwd(), 'user', 'state', 'health-state.json');
     const state = await readStateJson(stateFilePath);
     const previousBootId = state.lastBootId;
     if (previousBootId === bootId) return false;

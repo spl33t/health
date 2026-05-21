@@ -1,4 +1,4 @@
-import { HttpChecker } from '../src/checkers/http';
+import { HttpChecker } from '../core/checkers/http';
 
 async function testHttp() {
     console.log('--- Запуск теста HTTP Checker ---');

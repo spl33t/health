@@ -11,6 +11,15 @@ export class MonitorService {
     private alertProviders: BaseAlertProvider[] = [];
     private started = false;
     private intervalsByCheckerId: Map<string, NodeJS.Timeout> = new Map();
+    public onCheckRun:
+        | ((args: {
+            checker: BaseChecker;
+            result: ICheckResult;
+            previousIsUp: boolean | undefined;
+            statusChanged: boolean;
+            shouldNotify: boolean;
+        }) => Promise<void> | void)
+        | undefined;
 
     /**
      * @param downReminderIntervalMs интервал повторной рассылки при устойчивом DOWN (0 — отключено)
@@ -81,6 +90,15 @@ export class MonitorService {
         });
     }
 
+    public stop() {
+        if (!this.started) return;
+        this.started = false;
+        for (const interval of this.intervalsByCheckerId.values()) {
+            clearInterval(interval);
+        }
+        this.intervalsByCheckerId.clear();
+    }
+
     /**
      * Выполняет проверку и уведомляет провайдеров при изменении статуса.
      */
@@ -88,6 +106,10 @@ export class MonitorService {
         const run = await checker.run();
         if (!run) return;
         const { result, previousIsUp, statusChanged, shouldNotify } = run;
+
+        try {
+            void this.onCheckRun?.({ checker, result, previousIsUp, statusChanged, shouldNotify });
+        } catch { }
 
         if (statusChanged) {
             console.log(

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { VkCloudBalanceChecker } from '../src/checkers/vk-cloud-balance';
+import { VkCloudBalanceChecker } from '../core/checkers/vk-cloud-balance';
 
 dotenv.config();
 

@@ -5,6 +5,8 @@ npm-debug.log*
 
 # State
 state/
+user/state/
+user/logs/
 
 # Runtime data
 pids

@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "start": "ts-node user/index.ts",
+    "dev": "nodemon --watch 'core/**/*.ts' --watch 'user/**/*.ts' --exec 'ts-node' user/index.ts",
     "build": "tsc",
     "env:init": "node -e \"require('fs').copyFileSync('.env.example', '.env')\"",
     "": "----- Tests -----",

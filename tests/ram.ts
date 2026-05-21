@@ -1,4 +1,4 @@
-import { RamChecker } from '../src/checkers/ram';
+import { RamChecker } from '../core/checkers/ram';
 
 async function testRam() {
     console.log('--- Запуск теста RAM Checker ---');

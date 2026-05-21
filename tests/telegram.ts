@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
-import { TelegramProvider } from '../src/providers/telegram';
-import { ICheckResult } from '../src/types';
+import { TelegramProvider } from '../core/providers/telegram';
+import { ICheckResult } from '../core/types';
 
 dotenv.config();
 

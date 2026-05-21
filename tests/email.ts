@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
-import { EmailProvider } from '../src/providers/email';
-import { ICheckResult } from '../src/types';
+import { EmailProvider } from '../core/providers/email';
+import { ICheckResult } from '../core/types';
 
 dotenv.config();
 
@@ -54,4 +54,3 @@ async function testEmail() {
 testEmail().catch((err) => {
     console.error('Критическая ошибка:', err);
 });
-
